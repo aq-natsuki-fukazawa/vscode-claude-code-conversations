@@ -1,0 +1,133 @@
+{
+  "name": "claude-code-conversations",
+  "displayName": "Claude Code Conversations",
+  "description": "Always-visible past conversations panel for Claude Code",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "claude-sidebar-secondary": [
+        {
+          "id": "claudeConversationsSecondary",
+          "name": "Past Conversations",
+          "when": "!claude-code:doesNotSupportSecondarySidebar"
+        }
+      ],
+      "claude-sidebar": [
+        {
+          "id": "claudeConversations",
+          "name": "Past Conversations",
+          "when": "claude-code:doesNotSupportSecondarySidebar"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudeConversations.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeConversations.pin",
+        "title": "Pin Conversation",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "claudeConversations.unpin",
+        "title": "Unpin Conversation",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "claudeConversations.open",
+        "title": "Open Conversation"
+      },
+      {
+        "command": "claudeConversations.search",
+        "title": "Search Conversations",
+        "icon": "$(search)"
+      },
+      {
+        "command": "claudeConversations.focus",
+        "title": "Claude Code: Focus Past Conversations"
+      },
+      {
+        "command": "claudeConversations.togglePin",
+        "title": "Toggle Pin"
+      },
+      {
+        "command": "claudeConversations.newSession",
+        "title": "New Session",
+        "icon": "$(add)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claudeConversations.focus",
+        "key": "cmd+8",
+        "mac": "cmd+8"
+      },
+      {
+        "command": "list.focusDown",
+        "key": "j",
+        "when": "listFocus && (focusedView == claudeConversations || focusedView == claudeConversationsSecondary)"
+      },
+      {
+        "command": "list.focusUp",
+        "key": "k",
+        "when": "listFocus && (focusedView == claudeConversations || focusedView == claudeConversationsSecondary)"
+      },
+      {
+        "command": "list.select",
+        "key": "enter",
+        "when": "listFocus && (focusedView == claudeConversations || focusedView == claudeConversationsSecondary)"
+      },
+      {
+        "command": "claudeConversations.togglePin",
+        "key": "p",
+        "when": "listFocus && (focusedView == claudeConversations || focusedView == claudeConversationsSecondary)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeConversations.newSession",
+          "when": "view == claudeConversations || view == claudeConversationsSecondary",
+          "group": "navigation@1"
+        },
+        {
+          "command": "claudeConversations.refresh",
+          "when": "view == claudeConversations || view == claudeConversationsSecondary",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "claudeConversations.pin",
+          "when": "(view == claudeConversations || view == claudeConversationsSecondary) && viewItem == conversation",
+          "group": "inline"
+        },
+        {
+          "command": "claudeConversations.unpin",
+          "when": "(view == claudeConversations || view == claudeConversationsSecondary) && viewItem == pinnedConversation",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
