@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.2.0...claude-code-conversations-v0.3.0) (2026-02-17)
+
+
+### Features
+
+* upload .vsix asset to GitHub Release ([b0c3c1d](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/b0c3c1dab2676a2e9ee64995ba43853e5ecd1ef7))
+
+
+### Bug Fixes
+
+* filter tool_use waiting to permission-requiring tools only ([#3](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/issues/3)) ([be14d66](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/be14d661106abe94446b2ac774b1e0bdcbd2253c))
+
 ## [0.2.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.1.0...claude-code-conversations-v0.2.0) (2026-02-17)
 
 
