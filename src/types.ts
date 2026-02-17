@@ -30,4 +30,5 @@ export interface JnsonlMessage {
 export interface ContentBlock {
   type: string;
   text?: string;
+  name?: string; // tool name for tool_use blocks
 }

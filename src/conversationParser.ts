@@ -206,10 +206,18 @@ function detectWaitingState(filePath: string): WaitingState {
           // Check if assistant message contains tool_use blocks
           const content = obj.message?.content;
           if (Array.isArray(content)) {
-            const hasToolUse = content.some(
-              (block: ContentBlock) => block.type === "tool_use"
+            const WAITING_TOOLS = new Set([
+              "Bash",
+              "Write",
+              "Edit",
+              "NotebookEdit",
+              "AskUserQuestion",
+            ]);
+            const hasWaitingTool = content.some(
+              (block: ContentBlock) =>
+                block.type === "tool_use" && block.name !== undefined && WAITING_TOOLS.has(block.name)
             );
-            if (hasToolUse) {
+            if (hasWaitingTool) {
               result.isToolUseWaiting = true;
             }
           }
