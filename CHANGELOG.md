@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.5.0...claude-code-conversations-v0.5.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* readTailMetadataをステートレスな待機検出に簡素化 ([fd150bc](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/fd150bcfe7a8bdf1a6bccd6421b0ab811e296e83))
+
 ## [0.5.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.4.0...claude-code-conversations-v0.5.0) (2026-02-18)
 
 
