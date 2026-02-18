@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.4.0...claude-code-conversations-v0.5.0) (2026-02-18)
+
+
+### Features
+
+* ファイルアクティビティのチェック機能を改善 ([d7a81a2](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/d7a81a2f33afa33ff2e24a5aaf5eefc2f5009999))
+
 ## [0.4.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.3.0...claude-code-conversations-v0.4.0) (2026-02-18)
 
 
