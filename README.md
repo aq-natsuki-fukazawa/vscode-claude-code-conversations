@@ -15,13 +15,13 @@ VSCode extension that adds an always-visible past conversations panel for Claude
 
 ## Keybindings
 
-| Key     | Action                          |
-|---------|---------------------------------|
-| `Cmd+8` | Focus past conversations panel  |
-| `j`     | Move down in list               |
-| `k`     | Move up in list                 |
-| `Enter` | Open selected conversation      |
-| `p`     | Toggle pin on selected item     |
+| Key     | Action                         |
+| ------- | ------------------------------ |
+| `Cmd+8` | Focus past conversations panel |
+| `j`     | Move down in list              |
+| `k`     | Move up in list                |
+| `Enter` | Open selected conversation     |
+| `p`     | Toggle pin on selected item    |
 
 ## Development
 
@@ -31,16 +31,3 @@ npm run compile
 ```
 
 Press `F5` in VSCode to launch the Extension Development Host.
-
-## Release
-
-This project uses [release-please](https://github.com/googleapis/release-please) for automated versioning and changelog generation. Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat: add new feature        → minor version bump
-fix: fix a bug               → patch version bump
-feat!: breaking change       → major version bump
-chore: maintenance task      → no version bump
-```
-
-When commits are pushed to `main`, release-please automatically creates a Release PR with version bump and changelog updates. Merging the PR creates a Git tag and GitHub Release.

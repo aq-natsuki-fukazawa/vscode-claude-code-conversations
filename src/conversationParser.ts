@@ -126,9 +126,10 @@ async function parseConversationFile(
   });
 }
 
-interface WaitingState {
+interface TailMetadata {
   isWaiting: boolean;        // last message is user → waiting for Claude's response
   isToolUseWaiting: boolean; // last assistant message has tool_use → waiting for permission
+  customTitle?: string;      // custom title set via /rename command
 }
 
 /**
@@ -172,18 +173,50 @@ function isFileActive(filePath: string, currentSize: number): boolean {
 }
 
 /**
+ * Scan entire file for the last custom-title record.
+ * Uses string matching to avoid parsing every JSON line.
+ */
+function findCustomTitle(filePath: string): string | undefined {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    let lastTitle: string | undefined;
+    let idx = 0;
+    while (true) {
+      idx = content.indexOf('"custom-title"', idx);
+      if (idx === -1) { break; }
+      // Find the line boundaries
+      const lineStart = content.lastIndexOf("\n", idx) + 1;
+      let lineEnd = content.indexOf("\n", idx);
+      if (lineEnd === -1) { lineEnd = content.length; }
+      try {
+        const obj = JSON.parse(content.slice(lineStart, lineEnd));
+        if (obj.type === "custom-title" && obj.customTitle) {
+          lastTitle = obj.customTitle;
+        }
+      } catch {
+        // skip
+      }
+      idx = lineEnd;
+    }
+    return lastTitle;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Read last N bytes of a file to detect waiting states.
  * - isWaiting: last real message is from the user (waiting for response)
  * - isToolUseWaiting: last assistant message has tool_use blocks without subsequent tool_result
  *
  * Uses file-size-change tracking to distinguish active vs abandoned conversations.
  */
-function detectWaitingState(filePath: string): WaitingState {
-  const result: WaitingState = { isWaiting: false, isToolUseWaiting: false };
+function readTailMetadata(filePath: string): TailMetadata {
+  const result: TailMetadata = { isWaiting: false, isToolUseWaiting: false };
   try {
     const stat = fs.statSync(filePath);
 
-    // Check if the file is actively being written to
+    // Only compute waiting state for active files
     if (!isFileActive(filePath, stat.size)) {
       return result;
     }
@@ -199,9 +232,43 @@ function detectWaitingState(filePath: string): WaitingState {
     const lines = tail.split("\n").filter((l) => l.trim());
 
     // Walk backwards to find last user or assistant message
+    let interrupted = false;
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
         const obj = JSON.parse(lines[i]);
+
+        // Skip custom-title records
+        if (obj.type === "custom-title") {
+          continue;
+        }
+
+        // Detect interrupt patterns
+        if (obj.type === "queue-operation" && obj.operation === "dequeue") {
+          interrupted = true;
+          continue;
+        }
+
+        // Skip synthetic assistant messages (written after interrupt)
+        if (obj.type === "assistant" && obj.message?.model === "<synthetic>") {
+          continue;
+        }
+
+        // Detect user interrupt messages (tool rejection / request interrupted)
+        if (obj.type === "user" && !obj.isSidechain) {
+          const content = obj.message?.content;
+          if (typeof obj.toolUseResult === "string" && obj.toolUseResult.includes("rejected")) {
+            interrupted = true;
+            continue;
+          }
+          if (Array.isArray(content)) {
+            const text = content[0]?.text ?? "";
+            if (text.startsWith("[Request interrupted by user")) {
+              interrupted = true;
+              continue;
+            }
+          }
+        }
+
         if (obj.type === "assistant" && !obj.isSidechain) {
           // Check if assistant message contains tool_use blocks
           const content = obj.message?.content;
@@ -217,14 +284,16 @@ function detectWaitingState(filePath: string): WaitingState {
               (block: ContentBlock) =>
                 block.type === "tool_use" && block.name !== undefined && WAITING_TOOLS.has(block.name)
             );
-            if (hasWaitingTool) {
+            if (hasWaitingTool && !interrupted) {
               result.isToolUseWaiting = true;
             }
           }
           return result;
         }
         if (obj.type === "user" && !obj.isMeta && !obj.isSidechain) {
-          result.isWaiting = true;
+          if (!interrupted) {
+            result.isWaiting = true;
+          }
           return result;
         }
       } catch {
@@ -307,11 +376,12 @@ async function parseConversationFileFast(
         Math.round(stat.size / 2048)
       );
 
-      const waitingState = detectWaitingState(filePath);
+      const tailMeta = readTailMetadata(filePath);
+      const customTitle = findCustomTitle(filePath);
 
       resolve({
         sessionId,
-        title,
+        title: customTitle || title,
         timestamp: stat.mtime,
         filePath,
         messageCount: estimatedMessages,
@@ -320,8 +390,8 @@ async function parseConversationFileFast(
         projectPath,
         projectDir,
         isPinned: false,
-        isWaiting: waitingState.isWaiting,
-        isToolUseWaiting: waitingState.isToolUseWaiting,
+        isWaiting: tailMeta.isWaiting,
+        isToolUseWaiting: tailMeta.isToolUseWaiting,
       });
     });
 

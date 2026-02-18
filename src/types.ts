@@ -14,12 +14,13 @@ export interface ConversationMeta {
 }
 
 export interface JnsonlMessage {
-  type: "user" | "assistant" | "file-history-snapshot" | "queue-operation";
+  type: "user" | "assistant" | "file-history-snapshot" | "queue-operation" | "custom-title";
   sessionId?: string;
   timestamp?: string;
   isMeta?: boolean;
   isSidechain?: boolean;
   gitBranch?: string;
+  customTitle?: string; // present when type === "custom-title"
   message?: {
     role: string;
     content: string | ContentBlock[];
