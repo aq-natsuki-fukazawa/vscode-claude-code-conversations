@@ -21,10 +21,12 @@ export interface JnsonlMessage {
   isSidechain?: boolean;
   gitBranch?: string;
   customTitle?: string; // present when type === "custom-title"
+  toolUseResult?: unknown; // present on user messages that are tool_result responses
   message?: {
     role: string;
     content: string | ContentBlock[];
     model?: string;
+    stop_reason?: string | null; // null = streaming/intermediate, "end_turn" = done, "tool_use" = tool call
   };
 }
 
