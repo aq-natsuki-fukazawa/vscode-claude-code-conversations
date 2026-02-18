@@ -133,55 +133,6 @@ interface TailMetadata {
 }
 
 /**
- * Track file sizes between polls to detect active conversations.
- * Key: filePath, Value: { size, lastChangedAt }
- */
-const fileActivity = new Map<string, { size: number; lastChangedAt: number }>();
-
-interface FileActivityResult {
-  /** Whether the file is considered active (changed recently or within stale window) */
-  active: boolean;
-  /** Whether the file size changed since the last poll (i.e. still being written to) */
-  sizeChanged: boolean;
-}
-
-/**
- * Determine if a file is actively being written to.
- * - If file size changed since last check → active + sizeChanged
- * - If file size unchanged but last change was recent (< STALE_MS) → active only
- * - Otherwise → inactive (abandoned)
- */
-const STALE_MS = 10 * 60 * 1000; // 10 minutes with no file size change → inactive
-
-function checkFileActivity(filePath: string, currentSize: number): FileActivityResult {
-  const now = Date.now();
-  const prev = fileActivity.get(filePath);
-
-  if (!prev) {
-    // First check — use file mtime to decide initial activity
-    const stat = fs.statSync(filePath);
-    const age = now - stat.mtimeMs;
-    const isRecent = age < STALE_MS;
-    fileActivity.set(filePath, {
-      size: currentSize,
-      lastChangedAt: isRecent ? now : now - STALE_MS,
-    });
-    // On first check, assume size just changed if the file is recent
-    return { active: isRecent, sizeChanged: isRecent };
-  }
-
-  if (prev.size !== currentSize) {
-    // Size changed → active
-    fileActivity.set(filePath, { size: currentSize, lastChangedAt: now });
-    return { active: true, sizeChanged: true };
-  }
-
-  // Size unchanged — still active if last change was recent
-  const active = (now - prev.lastChangedAt) < STALE_MS;
-  return { active, sizeChanged: false };
-}
-
-/**
  * Scan entire file for the last custom-title record.
  * Uses string matching to avoid parsing every JSON line.
  */
@@ -214,18 +165,7 @@ function findCustomTitle(filePath: string): string | undefined {
 }
 
 /**
- * Read last N bytes of a file to detect waiting states.
- * - isWaiting: last real message is from the user (waiting for response)
- * - isToolUseWaiting: last assistant message has tool_use blocks without subsequent tool_result
- *
- * Uses file-size-change tracking to distinguish active vs abandoned conversations.
- */
-/**
  * Tools that may require user permission before execution.
- * When the last assistant message has one of these tool_use blocks without
- * a subsequent tool_result, show the "permission waiting" (warning) icon.
- * Auto-approved tools (Read, Grep, etc.) complete instantly so they rarely
- * appear without a tool_result during polling.
  */
 const PERMISSION_TOOLS = new Set([
   "Bash",
@@ -233,20 +173,26 @@ const PERMISSION_TOOLS = new Set([
   "Edit",
   "NotebookEdit",
   "AskUserQuestion",
+  "ExitPlanMode",
 ]);
 
+/**
+ * Stateless waiting-state detection based purely on message state.
+ *
+ * Walks backwards through the tail of the JSONL file and determines:
+ *   - isWaiting: conversation is actively processing (loading spinner)
+ *   - isToolUseWaiting: waiting for user permission (warning icon)
+ *
+ * Interrupted/abandoned conversations are detected by their explicit
+ * records (summary, "[Request interrupted by user", synthetic model).
+ * No external file-activity tracking needed.
+ */
 function readTailMetadata(filePath: string): TailMetadata {
   const result: TailMetadata = { isWaiting: false, isToolUseWaiting: false };
   try {
     const stat = fs.statSync(filePath);
 
-    // Only compute waiting state for active files
-    const activity = checkFileActivity(filePath, stat.size);
-    if (!activity.active) {
-      return result;
-    }
-
-    // Read last 16KB to find the last messages (tool_use content can be large)
+    // Read last 16KB to find the last messages
     const readSize = Math.min(stat.size, 16384);
     const fd = fs.openSync(filePath, "r");
     const buf = Buffer.alloc(readSize);
@@ -256,155 +202,100 @@ function readTailMetadata(filePath: string): TailMetadata {
     const tail = buf.toString("utf8");
     const lines = tail.split("\n").filter((l) => l.trim());
 
-    // Walk backwards to find the effective last message.
-    // We need to determine:
-    //   1. Is the conversation actively processing? (assistant is last → isWaiting)
-    //   2. Is it waiting for user permission? (assistant tool_use with permission tool → isToolUseWaiting)
-    //   3. Has the turn completed? (assistant with stop_reason="end_turn" → no waiting)
-    let interrupted = false;
     let toolResultSeen = false;
     for (let i = lines.length - 1; i >= 0; i--) {
+      let obj: Record<string, unknown>;
       try {
-        const obj: JnsonlMessage = JSON.parse(lines[i]);
+        obj = JSON.parse(lines[i]);
+      } catch {
+        continue;
+      }
 
-        // Skip non-conversation records
-        if (obj.type === "custom-title" || obj.type === "file-history-snapshot") {
+      const type = obj.type as string;
+
+      // summary record → conversation was interrupted and wrapped up
+      if (type === "summary") {
+        return result;
+      }
+
+      // Skip non-conversation records
+      if (type !== "user" && type !== "assistant") {
+        continue;
+      }
+
+      const msg = obj as unknown as JnsonlMessage;
+      if (msg.isSidechain) {
+        continue;
+      }
+      // Synthetic messages are written after interrupt
+      if (type === "assistant" && msg.message?.model === "<synthetic>") {
+        continue;
+      }
+
+      // --- User message ---
+      if (type === "user") {
+        const content = msg.message?.content;
+
+        // Interrupt message → conversation stopped
+        if (Array.isArray(content)) {
+          const text = (content[0] as ContentBlock)?.text ?? "";
+          if (text.startsWith("[Request interrupted by user")) {
+            return result;
+          }
+        }
+
+        // tool_result → not a real user turn, skip
+        if (Array.isArray(content) && content.some(
+          (block: ContentBlock) => block.type === "tool_result"
+        )) {
+          toolResultSeen = true;
           continue;
         }
-        // Skip sub-agent progress records
-        if ((obj as { type: string }).type === "progress") {
-          continue;
-        }
-        // summary / system / pr-link indicate a completed turn — no waiting
-        if ((obj as { type: string }).type === "summary" ||
-            (obj as { type: string }).type === "system" ||
-            (obj as { type: string }).type === "pr-link") {
-          return result;
-        }
 
-        // queue-operation marks a turn boundary — anything before it is a previous turn
-        if (obj.type === "queue-operation") {
-          return result;
-        }
-
-        // Skip synthetic assistant messages (written after interrupt)
-        if (obj.type === "assistant" && obj.message?.model === "<synthetic>") {
+        if (msg.isMeta) {
           continue;
         }
 
-        // --- User message handling ---
-        if (obj.type === "user" && !obj.isSidechain) {
-          const content = obj.message?.content;
+        // Real user message → Claude should be responding
+        result.isWaiting = true;
+        return result;
+      }
 
-          // Detect user interrupt messages
-          if (typeof (obj as { toolUseResult?: unknown }).toolUseResult === "string" &&
-              ((obj as { toolUseResult: string }).toolUseResult).includes("rejected")) {
-            interrupted = true;
-            continue;
-          }
-          if (Array.isArray(content)) {
-            const text = (content[0] as ContentBlock)?.text ?? "";
-            if (text.startsWith("[Request interrupted by user")) {
-              interrupted = true;
-              continue;
-            }
-          }
+      // --- Assistant message ---
+      const stopReason = msg.message?.stop_reason;
 
-          // Local command / system-generated messages mean the previous turn completed
-          if (typeof content === "string" && (
-            content.startsWith("<local-command-") ||
-            content.startsWith("<command-name>") ||
-            content.startsWith("<bash-input>") ||
-            content.startsWith("<bash-stdout>") ||
-            content.startsWith("<task-notification>") ||
-            content.startsWith("Unknown skill:")
-          )) {
-            return result; // turn is done — no waiting
-          }
+      if (stopReason === "end_turn" || stopReason === "stop_sequence" || stopReason === "refusal") {
+        return result;
+      }
 
-          // Skip tool_result user messages (these are tool responses, not new user questions)
-          if (Array.isArray(content) && content.some(
-            (block: ContentBlock) => block.type === "tool_result"
-          )) {
-            toolResultSeen = true;
-            continue;
-          }
+      // Check for tool_use blocks
+      const content = msg.message?.content;
+      if (Array.isArray(content)) {
+        const toolUseBlock = content.find(
+          (block: ContentBlock) => block.type === "tool_use" && block.name !== undefined
+        );
 
-          // Skip isMeta messages
-          if (obj.isMeta) {
-            continue;
-          }
-
-          // Real user message — Claude should be responding
-          if (!interrupted) {
+        if (toolUseBlock && !toolResultSeen) {
+          if (PERMISSION_TOOLS.has(toolUseBlock.name!)) {
+            const ts = msg.timestamp;
+            const age = ts ? Date.now() - new Date(ts).getTime() : Infinity;
+            result.isToolUseWaiting = age > 3000;
+            result.isWaiting = !result.isToolUseWaiting;
+          } else {
             result.isWaiting = true;
           }
           return result;
         }
 
-        // --- Assistant message handling ---
-        if (obj.type === "assistant" && !obj.isSidechain) {
-          if (interrupted) {
-            return result;
-          }
-
-          const stopReason = obj.message?.stop_reason;
-
-          // Turn completed — no waiting state
-          if (stopReason === "end_turn" || stopReason === "stop_sequence" || stopReason === "refusal") {
-            return result;
-          }
-
-          // Check content blocks for tool_use
-          const content = obj.message?.content;
-          if (Array.isArray(content)) {
-            const toolUseBlock = content.find(
-              (block: ContentBlock) => block.type === "tool_use" && block.name !== undefined
-            );
-
-            if (toolUseBlock && !toolResultSeen) {
-              // Has tool_use without a tool_result yet
-              if (PERMISSION_TOOLS.has(toolUseBlock.name!)) {
-                // Show warning only if enough time has passed (auto-approved tools
-                // get their tool_result almost instantly, so a brief grace period
-                // avoids flashing the warning icon for auto-approved executions)
-                const ts = (obj as { timestamp?: string }).timestamp;
-                const age = ts ? Date.now() - new Date(ts).getTime() : Infinity;
-                if (age > 3000) {
-                  result.isToolUseWaiting = true;
-                } else {
-                  result.isWaiting = true;
-                }
-              } else {
-                // Auto-executed tool (Read, Grep, Glob, Task, etc.) — still processing
-                result.isWaiting = true;
-              }
-              return result;
-            }
-
-            if (toolUseBlock && toolResultSeen) {
-              // tool_use already has a tool_result — Claude should be generating next response
-              result.isWaiting = true;
-              return result;
-            }
-          }
-
-          // Assistant message with stop_reason=null and no tool_use.
-          // Claude Code writes content blocks incrementally, so the final block
-          // often has stop_reason=null even when the turn is complete.
-          // Use file size change between polls to distinguish:
-          //   - Size changed since last poll → still streaming → loading
-          //   - Size unchanged → streaming finished → no waiting
-          if (stopReason === null || stopReason === undefined) {
-            if (activity.sizeChanged) {
-              result.isWaiting = true;
-            }
-          }
+        if (toolUseBlock && toolResultSeen) {
+          result.isWaiting = true;
           return result;
         }
-      } catch {
-        // skip non-JSON
       }
+
+      // stop_reason is null/undefined, no tool_use → actively streaming
+      result.isWaiting = true;
+      return result;
     }
   } catch {
     // ignore
