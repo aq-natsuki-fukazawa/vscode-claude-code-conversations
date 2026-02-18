@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.3.0...claude-code-conversations-v0.4.0) (2026-02-18)
+
+
+### Features
+
+* カスタムタイトル機能を追加 ([f0c2ae2](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/f0c2ae2ddaf8227f8b7a84c5d3d98caddb34f69a))
+
 ## [0.3.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.2.0...claude-code-conversations-v0.3.0) (2026-02-17)
 
 
