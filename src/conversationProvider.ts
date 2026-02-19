@@ -30,7 +30,7 @@ export class ConversationItem extends vscode.TreeItem {
     let icon: string;
     let iconColor: vscode.ThemeColor | undefined;
     if (meta.isToolUseWaiting) {
-      icon = "warning";
+      icon = "alert";
       iconColor = new vscode.ThemeColor("charts.orange");
     } else if (meta.isWaiting) {
       icon = "loading~spin";
