@@ -126,7 +126,7 @@ async function parseConversationFile(
   });
 }
 
-interface TailMetadata {
+export interface TailMetadata {
   isWaiting: boolean;        // last message is user → waiting for Claude's response
   isToolUseWaiting: boolean; // last assistant message has tool_use → waiting for permission
   customTitle?: string;      // custom title set via /rename command
@@ -167,7 +167,7 @@ function findCustomTitle(filePath: string): string | undefined {
 /**
  * Tools that may require user permission before execution.
  */
-const PERMISSION_TOOLS = new Set([
+export const PERMISSION_TOOLS = new Set([
   "Bash",
   "Write",
   "Edit",
@@ -187,7 +187,7 @@ const PERMISSION_TOOLS = new Set([
  * records (summary, "[Request interrupted by user", synthetic model).
  * No external file-activity tracking needed.
  */
-function readTailMetadata(filePath: string): TailMetadata {
+export function readTailMetadata(filePath: string): TailMetadata {
   const result: TailMetadata = { isWaiting: false, isToolUseWaiting: false };
   try {
     const stat = fs.statSync(filePath);
@@ -376,6 +376,10 @@ async function parseConversationFileFast(
       const tailMeta = readTailMetadata(filePath);
       const customTitle = findCustomTitle(filePath);
 
+      // Suppress waiting indicators for stale sessions (not updated in 5 min)
+      const fileAge = Date.now() - stat.mtime.getTime();
+      const isStale = fileAge > 5 * 60 * 1000;
+
       resolve({
         sessionId,
         title: customTitle || title,
@@ -387,8 +391,8 @@ async function parseConversationFileFast(
         projectPath,
         projectDir,
         isPinned: false,
-        isWaiting: tailMeta.isWaiting,
-        isToolUseWaiting: tailMeta.isToolUseWaiting,
+        isWaiting: isStale ? false : tailMeta.isWaiting,
+        isToolUseWaiting: isStale ? false : tailMeta.isToolUseWaiting,
       });
     });
 
