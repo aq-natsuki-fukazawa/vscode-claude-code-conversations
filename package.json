@@ -68,6 +68,21 @@
         "command": "claudeConversations.newSession",
         "title": "New Session",
         "icon": "$(add)"
+      },
+      {
+        "command": "claudeConversations.copySessionId",
+        "title": "Copy Session ID",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "claudeConversations.rename",
+        "title": "Rename Conversation",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "claudeConversations.delete",
+        "title": "Delete Conversation",
+        "icon": "$(trash)"
       }
     ],
     "keybindings": [
@@ -95,6 +110,11 @@
         "command": "claudeConversations.togglePin",
         "key": "p",
         "when": "listFocus && (focusedView == claudeConversations || focusedView == claudeConversationsSecondary)"
+      },
+      {
+        "command": "claudeConversations.delete",
+        "key": "d",
+        "when": "listFocus && (focusedView == claudeConversations || focusedView == claudeConversationsSecondary)"
       }
     ],
     "menus": {
@@ -120,6 +140,26 @@
           "command": "claudeConversations.unpin",
           "when": "(view == claudeConversations || view == claudeConversationsSecondary) && viewItem == pinnedConversation",
           "group": "inline"
+        },
+        {
+          "command": "claudeConversations.rename",
+          "when": "(view == claudeConversations || view == claudeConversationsSecondary) && (viewItem == conversation || viewItem == pinnedConversation)",
+          "group": "inline"
+        },
+        {
+          "command": "claudeConversations.copySessionId",
+          "when": "view == claudeConversations || view == claudeConversationsSecondary",
+          "group": "inline"
+        },
+        {
+          "command": "claudeConversations.delete",
+          "when": "(view == claudeConversations || view == claudeConversationsSecondary) && (viewItem == conversation || viewItem == pinnedConversation)",
+          "group": "inline"
+        },
+        {
+          "command": "claudeConversations.delete",
+          "when": "(view == claudeConversations || view == claudeConversationsSecondary) && (viewItem == conversation || viewItem == pinnedConversation)",
+          "group": "2_delete"
         }
       ]
     }

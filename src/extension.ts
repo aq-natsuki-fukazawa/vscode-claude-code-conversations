@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
 import { ConversationProvider, ConversationItem } from "./conversationProvider";
 import { pinSession, unpinSession, isPinned } from "./pinManager";
 import { getClaudeProjectsDir } from "./conversationParser";
@@ -100,6 +102,101 @@ export function activate(context: vscode.ExtensionContext) {
         if (item?.meta) {
           unpinSession(item.meta.sessionId);
           provider.refresh();
+        }
+      },
+    ),
+  );
+
+  // Copy session ID to clipboard
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "claudeConversations.copySessionId",
+      async (item: ConversationItem) => {
+        if (item?.meta) {
+          await vscode.env.clipboard.writeText(item.meta.sessionId);
+          vscode.window.showInformationMessage(
+            `Session ID copied: ${item.meta.sessionId}`,
+          );
+        }
+      },
+    ),
+  );
+
+  // Rename conversation
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "claudeConversations.rename",
+      async (item: ConversationItem) => {
+        if (!item?.meta) return;
+
+        const newTitle = await vscode.window.showInputBox({
+          prompt: "Enter new conversation title",
+          value: item.meta.title,
+        });
+
+        if (!newTitle) return;
+
+        try {
+          const record = JSON.stringify({
+            type: "custom-title",
+            customTitle: newTitle,
+            sessionId: item.meta.sessionId,
+          });
+          fs.appendFileSync(item.meta.filePath, record + "\n", "utf8");
+          provider.refresh();
+          vscode.window.showInformationMessage(
+            `Renamed to "${newTitle}"`,
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(
+            `Failed to rename: ${err}`,
+          );
+        }
+      },
+    ),
+  );
+
+  // Delete conversation (move to .bak directory)
+  // Based on claude-code-sessions by es6.kr (MIT License)
+  // https://github.com/es6kr/claude-code-sessions
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "claudeConversations.delete",
+      async (item?: ConversationItem) => {
+        // When invoked via keybinding, item is not passed — use tree selection
+        if (!item) {
+          const selected = treeView1.selection[0] ?? treeView2.selection[0];
+          if (selected instanceof ConversationItem) {
+            item = selected;
+          }
+        }
+        if (!item?.meta) return;
+
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete session "${item.meta.title}"?`,
+          { modal: true },
+          "Delete",
+        );
+
+        if (confirm !== "Delete") return;
+
+        try {
+          const backupDir = path.join(
+            path.dirname(item.meta.filePath),
+            ".bak",
+          );
+          fs.mkdirSync(backupDir, { recursive: true });
+          const backupPath = path.join(
+            backupDir,
+            path.basename(item.meta.filePath),
+          );
+          fs.renameSync(item.meta.filePath, backupPath);
+
+          unpinSession(item.meta.sessionId);
+          provider.refresh();
+          vscode.window.showInformationMessage("Session deleted");
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to delete: ${err}`);
         }
       },
     ),
