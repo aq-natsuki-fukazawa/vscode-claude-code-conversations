@@ -3,6 +3,7 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 import { execSync } from "child_process";
+import { normalizeTabTitle, collapseWhitespace } from "./tabTitleUtils";
 
 /**
  * Tracks which Claude Code sessions are open as editor tabs.
@@ -182,11 +183,7 @@ export class TabSessionTracker {
    * Register a mapping when we open a session (so we can track it at runtime).
    */
   registerOpen(sessionId: string, conversationTitle: string): void {
-    // Claude Code truncates: title.length > 25 ? title.slice(0,24)+"…" : title
-    const tabTitle =
-      conversationTitle.length > 25
-        ? conversationTitle.substring(0, 24) + "…"
-        : conversationTitle;
+    const tabTitle = normalizeTabTitle(conversationTitle);
     this.sessionToTitle.set(sessionId, tabTitle);
     this.titleToSession.set(tabTitle, sessionId);
   }
@@ -210,8 +207,9 @@ export class TabSessionTracker {
           tab.input instanceof vscode.TabInputWebview &&
           (tab.input as vscode.TabInputWebview).viewType.includes("claudeVSCodePanel")
         ) {
-          const match = tab.label === title;
-          log.appendLine(`  tab[${gi}][${ti}]: label=${JSON.stringify(tab.label)} match=${match}`);
+          const normalizedLabel = collapseWhitespace(tab.label);
+          const match = normalizedLabel === title || normalizedLabel.startsWith(title);
+          log.appendLine(`  tab[${gi}][${ti}]: label=${JSON.stringify(tab.label)} normalizedLabel=${JSON.stringify(normalizedLabel)} match=${match}`);
           if (match) {
             return { tab, groupIndex: gi, tabIndex: ti };
           }
