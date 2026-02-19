@@ -64,6 +64,7 @@ function assistantMsg(
     model?: string;
     isSidechain?: boolean;
     timestamp?: string;
+    usage?: { output_tokens?: number };
   } = {}
 ) {
   return {
@@ -76,6 +77,7 @@ function assistantMsg(
       content,
       ...(opts.model ? { model: opts.model } : {}),
       ...(opts.stop_reason !== undefined ? { stop_reason: opts.stop_reason } : {}),
+      ...(opts.usage ? { usage: opts.usage } : {}),
     },
   };
 }
@@ -114,25 +116,25 @@ function nonConversationRecord(type: string) {
 describe("Group 0: Error / Empty file", () => {
   it("T0.1 - file does not exist", () => {
     const result = readTailMetadata("/tmp/nonexistent-file-abc123.jsonl");
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T0.2 - empty file (0 bytes)", () => {
     const f = createTempRaw("");
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T0.3 - whitespace-only lines", () => {
     const f = createTempRaw("\n\n   \n  \n");
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T0.4 - non-JSON lines only", () => {
     const f = createTempRaw("not json\nstill not json\n");
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -148,7 +150,7 @@ describe("Group 1: Summary record", () => {
       summaryRecord(),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T1.2 - summary followed by non-conversation records", () => {
@@ -159,7 +161,7 @@ describe("Group 1: Summary record", () => {
       nonConversationRecord("file-history-snapshot"),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -173,7 +175,7 @@ describe("Group 2: Non-conversation records only", () => {
       nonConversationRecord("file-history-snapshot"),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T2.2 - mixed non-conversation records", () => {
@@ -183,7 +185,7 @@ describe("Group 2: Non-conversation records only", () => {
       nonConversationRecord("file-history-snapshot"),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -196,7 +198,7 @@ describe("Group 3: Sidechain messages", () => {
       userMsg("hello", { isSidechain: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T3.2 - sidechain assistant only", () => {
@@ -204,7 +206,7 @@ describe("Group 3: Sidechain messages", () => {
       assistantMsg("hi", { isSidechain: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T3.3 - sidechain then real user", () => {
@@ -213,7 +215,7 @@ describe("Group 3: Sidechain messages", () => {
       assistantMsg("hi", { stop_reason: "end_turn", isSidechain: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -226,7 +228,7 @@ describe("Group 4: Synthetic assistant messages", () => {
       assistantMsg("interrupted", { model: "<synthetic>" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T4.2 - synthetic assistant then real user (walking backward)", () => {
@@ -235,7 +237,7 @@ describe("Group 4: Synthetic assistant messages", () => {
       assistantMsg("interrupted", { model: "<synthetic>" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T4.3 - synthetic assistant then assistant(end_turn) (walking backward)", () => {
@@ -244,7 +246,7 @@ describe("Group 4: Synthetic assistant messages", () => {
       assistantMsg("interrupted", { model: "<synthetic>" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -257,7 +259,7 @@ describe("Group 5: User interrupt messages", () => {
       userMsg([interruptBlock()]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T5.2 - interrupt with additional content blocks", () => {
@@ -265,7 +267,7 @@ describe("Group 5: User interrupt messages", () => {
       userMsg([interruptBlock(), textBlock("other stuff")]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T5.3 - string content with interrupt text (NOT detected as interrupt)", () => {
@@ -274,7 +276,7 @@ describe("Group 5: User interrupt messages", () => {
     ]);
     const result = readTailMetadata(f);
     // String content is NOT checked for interrupt pattern - only array content is
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -287,7 +289,7 @@ describe("Group 6: tool_result user messages", () => {
       userMsg([toolResultBlock("ok")]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T6.2 - tool_result then assistant(tool_use:Bash) → toolResultSeen", () => {
@@ -297,7 +299,7 @@ describe("Group 6: tool_result user messages", () => {
     ]);
     const result = readTailMetadata(f);
     // toolResultSeen path: always isWaiting=true regardless of permission tool
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T6.3 - tool_result then assistant(tool_use:Read) → toolResultSeen", () => {
@@ -306,7 +308,7 @@ describe("Group 6: tool_result user messages", () => {
       userMsg([toolResultBlock("file content")]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T6.5 - interrupt + tool_result mixed (interrupt in first block)", () => {
@@ -315,7 +317,7 @@ describe("Group 6: tool_result user messages", () => {
     ]);
     const result = readTailMetadata(f);
     // Interrupt check fires first (content[0].text starts with interrupt pattern)
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -328,7 +330,7 @@ describe("Group 7: isMeta user messages", () => {
       userMsg("system info", { isMeta: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T7.2 - isMeta then real user", () => {
@@ -337,7 +339,7 @@ describe("Group 7: isMeta user messages", () => {
       userMsg("system info", { isMeta: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T7.3 - isMeta then assistant(end_turn)", () => {
@@ -346,7 +348,7 @@ describe("Group 7: isMeta user messages", () => {
       userMsg("system info", { isMeta: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -359,7 +361,7 @@ describe("Group 8: Real user message (waiting)", () => {
       userMsg("Please fix the bug"),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T8.2 - array content user message", () => {
@@ -367,7 +369,7 @@ describe("Group 8: Real user message (waiting)", () => {
       userMsg([textBlock("hello")]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T8.3 - user message after non-conversation records", () => {
@@ -377,7 +379,7 @@ describe("Group 8: Real user message (waiting)", () => {
       nonConversationRecord("custom-title"),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -390,7 +392,7 @@ describe("Group 9: Assistant completed states", () => {
       assistantMsg("Done!", { stop_reason: "end_turn" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T9.2 - stop_reason: stop_sequence", () => {
@@ -398,7 +400,7 @@ describe("Group 9: Assistant completed states", () => {
       assistantMsg("Done!", { stop_reason: "stop_sequence" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T9.3 - stop_reason: refusal", () => {
@@ -406,7 +408,7 @@ describe("Group 9: Assistant completed states", () => {
       assistantMsg("I can't do that.", { stop_reason: "refusal" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -422,7 +424,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
       }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 
   it("T10.2 - Bash, fresh timestamp (<3s) → isWaiting", () => {
@@ -434,7 +436,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
       }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T10.3 - Edit, no timestamp → age=Infinity → isToolUseWaiting", () => {
@@ -451,7 +453,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
       },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 
   it("T10.4 - ExitPlanMode, exactly 3000ms → age <= 3000 → isWaiting (boundary)", () => {
@@ -464,7 +466,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
     ]);
     const result = readTailMetadata(f);
     // 3000 > 3000 is false, so isToolUseWaiting = false, isWaiting = true
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T10.5 - AskUserQuestion, 3001ms → isToolUseWaiting", () => {
@@ -476,7 +478,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
       }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 
   it("T10.6 - Write, old timestamp", () => {
@@ -487,7 +489,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
       }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 
   it("T10.7 - NotebookEdit, old timestamp", () => {
@@ -498,7 +500,7 @@ describe("Group 10: Assistant with permission tool (no toolResultSeen)", () => {
       }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 });
 
@@ -511,7 +513,7 @@ describe("Group 11: Assistant with non-permission tool (no toolResultSeen)", () 
       assistantMsg([toolUseBlock("Read")], { stop_reason: null }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T11.2 - Grep → isWaiting", () => {
@@ -519,7 +521,7 @@ describe("Group 11: Assistant with non-permission tool (no toolResultSeen)", () 
       assistantMsg([toolUseBlock("Grep")], { stop_reason: null }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T11.3 - unknown tool name → isWaiting", () => {
@@ -527,7 +529,7 @@ describe("Group 11: Assistant with non-permission tool (no toolResultSeen)", () 
       assistantMsg([toolUseBlock("MyCustomTool")], { stop_reason: null }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -544,7 +546,7 @@ describe("Group 12: Assistant with tool_use + toolResultSeen", () => {
       userMsg([toolResultBlock("command output")]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T12.2 - non-permission tool (Read) + toolResultSeen → isWaiting", () => {
@@ -553,7 +555,7 @@ describe("Group 12: Assistant with tool_use + toolResultSeen", () => {
       userMsg([toolResultBlock("file content")]),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -566,7 +568,7 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
       assistantMsg("I'm thinking...", { stop_reason: null }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T13.2 - stop_reason: undefined (missing field)", () => {
@@ -583,7 +585,7 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
       },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T13.3 - no message field at all", () => {
@@ -591,7 +593,7 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
       { type: "assistant", sessionId: "sess-1" },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T13.4 - array content but no tool_use blocks", () => {
@@ -599,7 +601,7 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
       assistantMsg([textBlock("thinking...")], { stop_reason: null }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T13.5 - tool_use block but name is undefined", () => {
@@ -608,7 +610,7 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
     ]);
     const result = readTailMetadata(f);
     // tool_use with no name is not found by .find() condition (block.name !== undefined)
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T13.6 - stop_reason: max_tokens (not a terminal stop reason)", () => {
@@ -616,7 +618,7 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
       assistantMsg("truncated", { stop_reason: "max_tokens" }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T13.7 - empty array content, stop_reason null", () => {
@@ -624,7 +626,254 @@ describe("Group 13: Assistant streaming (no tool_use)", () => {
       assistantMsg([], { stop_reason: null }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
+  });
+
+  it("T13.8 - output_tokens=1 + 短いテキスト(tool_useなし) → 中間プレースホルダーとしてスキップ", () => {
+    const f = createTempJsonl([
+      assistantMsg([textBlock("これは十分に長いテキストコンテンツです。ストリーミングが中断されました。")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Text ≤200 chars → still treated as intermediate placeholder, skipped
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13.8b - output_tokens=1 + 長いテキスト(>200文字, tool_useなし) → 中断と判定（待機しない）", () => {
+    const longText = "以下のように使われています：\n\n" +
+      "**husky** — Git hookを自動設定するツール\n" +
+      "- package.jsonのdevDependenciesに含まれている\n" +
+      "- .huskyディレクトリにpre-commitフックが設定されている\n" +
+      "- commitlintと組み合わせてconventional commits形式を強制している\n\n" +
+      "**release-please** — リリース自動化ツール\n" +
+      "- conventional commitsを読み取ってsemverバンプとCHANGELOGを自動生成する";
+    const f = createTempJsonl([
+      assistantMsg([textBlock(longText)], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Long text (>200 chars) with no tool_use → treated as abandoned final response
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13.9 - 中間プレースホルダー: output_tokens=1 + テキスト短い → スキップ（待機しない）", () => {
+    const f = createTempJsonl([
+      assistantMsg([textBlock("short")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder with short text is skipped; no other messages → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13.10 - 正常ストリーミング: output_tokens=100 + テキストあり → 待機中", () => {
+    const f = createTempJsonl([
+      assistantMsg([textBlock("これは十分に長いテキストコンテンツです。正常にストリーミング中。")], {
+        stop_reason: null,
+        usage: { output_tokens: 100 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
+  });
+
+  it("T13.11 - usageなし → 既存動作に変更なし (isWaiting: true)", () => {
+    const f = createTempJsonl([
+      assistantMsg([textBlock("テキストコンテンツがありますがusageがありません")], {
+        stop_reason: null,
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
+  });
+
+  it("T13.12 - output_tokens=0 + テキストあり → 中間プレースホルダーとしてスキップ", () => {
+    const f = createTempJsonl([
+      assistantMsg([textBlock("テキストがあるのにoutput_tokensが0は中間書き込み")], {
+        stop_reason: null,
+        usage: { output_tokens: 0 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder skipped; no other messages → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13.13 - output_tokens=1 + string content → 中間プレースホルダーとしてスキップ", () => {
+    const f = createTempJsonl([
+      assistantMsg("これは文字列コンテンツです。長いですが配列ではありません。", {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // string content → textLength is 0 → placeholder skipped → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13.14 - output_tokens=2 + 長いテキスト → 中断と判定（比率ベース）", () => {
+    const longText = "これは十分に長いテキストコンテンツです。output_tokensが2しかないのに700文字以上のテキストがある場合、中間書き込みが残った状態です。" +
+      "実際にはストリーミングが完了しているにもかかわらず、最終的なstop_reasonが書き込まれなかったケースを検出します。";
+    const f = createTempJsonl([
+      assistantMsg([textBlock(longText)], {
+        stop_reason: null,
+        usage: { output_tokens: 2 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // textLength > 10 && output_tokens (2) < textLength / 20 → abandoned
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13.15 - output_tokens がテキスト量に見合う → 正常ストリーミング", () => {
+    // 40文字のテキスト, output_tokens=10 → 10 < 40/20 (=2) は false → 正常
+    const f = createTempJsonl([
+      assistantMsg([textBlock("これは40文字程度のテキストコンテンツです。正常にストリーミング中。")], {
+        stop_reason: null,
+        usage: { output_tokens: 10 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
+  });
+});
+
+// ============================================================
+// Group 13b: 中間プレースホルダー + tool_use（ストリーミング中書き込み）
+// ============================================================
+describe("Group 13b: Intermediate placeholder with tool_use", () => {
+  it("T13b.1 - output_tokens=1 + tool_use → プレースホルダーはスキップされる", () => {
+    const f = createTempJsonl([
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder skipped, no other messages → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13b.2 - プレースホルダー(tool_use)の前に実ユーザーメッセージ → 待機中", () => {
+    const f = createTempJsonl([
+      userMsg("fix this bug"),
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder skipped, real user message found → isWaiting
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
+  });
+
+  it("T13b.3 - プレースホルダー(tool_use)の前にassistant(end_turn) → 待機しない", () => {
+    const f = createTempJsonl([
+      assistantMsg("done", { stop_reason: "end_turn" }),
+      assistantMsg([toolUseBlock("Edit")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder skipped, end_turn found → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13b.4 - 複数プレースホルダー → すべてスキップされる", () => {
+    const f = createTempJsonl([
+      assistantMsg("done", { stop_reason: "end_turn" }),
+      assistantMsg([textBlock("thinking...")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Both placeholders skipped, end_turn found → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13b.5 - output_tokens=2 + tool_use → 通常のtool_use検出", () => {
+    const f = createTempJsonl([
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 2 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // output_tokens > 1 → not a placeholder → normal tool_use detection
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
+  });
+
+  it("T13b.6 - output_tokens=1 + tool_use + 長いテキスト → プレースホルダーとしてスキップ", () => {
+    const f = createTempJsonl([
+      assistantMsg(
+        [textBlock("これは十分に長いテキストです。ストリーミング中に中断されました。"), toolUseBlock("Bash")],
+        {
+          stop_reason: null,
+          usage: { output_tokens: 1 },
+          timestamp: "2020-01-01T00:00:00Z",
+        }
+      ),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder skipped; no other messages → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T13b.7 - 長いセッション: 中間テキスト(output_tokens=1)の前にtool_use → 正しくtool_waiting検出", () => {
+    // Real-world pattern from long sessions: text placeholder + tool_use placeholder + tool_result
+    // Walking backwards: tool_result → toolResultSeen, tool_use placeholder → skip,
+    // text placeholder → skip, real tool_use → tool_waiting
+    const f = createTempJsonl([
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 19 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+      userMsg([toolResultBlock("command output")]),
+      assistantMsg([textBlock("ダメです。正常区間でも大量にevent=trueが出ています。threshold=0.55は低すぎです。")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+      userMsg([toolResultBlock("more output")]),
+    ]);
+    const result = readTailMetadata(f);
+    // tool_result → toolResultSeen, tool_use placeholder → skip, text placeholder → skip,
+    // tool_result → toolResultSeen (already), tool_use(Bash, out_tok=19) + toolResultSeen → isWaiting
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
+  });
+
+  it("T13b.8 - 中間テキスト(output_tokens=1)の前にユーザーメッセージ → 待機中", () => {
+    const f = createTempJsonl([
+      userMsg("これを修正して"),
+      assistantMsg([textBlock("了解です。まず確認します。")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // Placeholder skipped, real user message found → isWaiting
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -641,7 +890,7 @@ describe("Group 14: Multiple tool_use blocks", () => {
     ]);
     const result = readTailMetadata(f);
     // .find() gets Bash (the first tool_use with name), it's a permission tool, old → isToolUseWaiting
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 
   it("T14.2 - [Read, Bash] → find() returns first (Read, non-permission)", () => {
@@ -652,7 +901,7 @@ describe("Group 14: Multiple tool_use blocks", () => {
     ]);
     const result = readTailMetadata(f);
     // .find() returns Read first, which is NOT a permission tool → isWaiting
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T14.3 - [Bash, Read] → find() returns first (Bash, permission), old", () => {
@@ -664,7 +913,7 @@ describe("Group 14: Multiple tool_use blocks", () => {
     ]);
     const result = readTailMetadata(f);
     // .find() returns Bash first, permission tool, old → isToolUseWaiting
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: true });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: true });
   });
 
   it("T14.4 - tool_use with empty string name → not in PERMISSION_TOOLS", () => {
@@ -673,7 +922,7 @@ describe("Group 14: Multiple tool_use blocks", () => {
     ]);
     const result = readTailMetadata(f);
     // name "" !== undefined, so toolUseBlock is found. PERMISSION_TOOLS.has("") is false
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -687,7 +936,7 @@ describe("Group 15: Complex multi-message scenarios", () => {
       userMsg("sidechain", { isSidechain: true }),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T15.2 - isMeta → tool_result → assistant(tool_use:Bash, old)", () => {
@@ -702,7 +951,7 @@ describe("Group 15: Complex multi-message scenarios", () => {
     const result = readTailMetadata(f);
     // Walking backward: isMeta skipped, tool_result sets toolResultSeen,
     // assistant with tool_use + toolResultSeen → isWaiting (line 290)
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T15.3 - synthetic → interrupt → assistant(tool_use)", () => {
@@ -713,7 +962,7 @@ describe("Group 15: Complex multi-message scenarios", () => {
     ]);
     const result = readTailMetadata(f);
     // Walking backward: synthetic skipped, interrupt user → returns default
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T15.4 - non-conversation records interleaved between tool_result and assistant", () => {
@@ -724,7 +973,7 @@ describe("Group 15: Complex multi-message scenarios", () => {
     ]);
     const result = readTailMetadata(f);
     // tool_result sets toolResultSeen, file-history-snapshot skipped, assistant + toolResultSeen
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T15.5 - real user behind sidechain + synthetic + non-conversation", () => {
@@ -735,7 +984,7 @@ describe("Group 15: Complex multi-message scenarios", () => {
       nonConversationRecord("custom-title"),
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T15.6 - summary between waiting-state messages cancels waiting", () => {
@@ -746,7 +995,7 @@ describe("Group 15: Complex multi-message scenarios", () => {
     ]);
     const result = readTailMetadata(f);
     // Walking backward: "new message" → isWaiting true (returns immediately on first real user)
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T15.7 - assistant(end_turn) as most recent effective message", () => {
@@ -758,7 +1007,46 @@ describe("Group 15: Complex multi-message scenarios", () => {
     ]);
     const result = readTailMetadata(f);
     // Walking backward: non-conversation skipped, assistant(end_turn) → returns default
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T15.8 - output_tokens=1の最終応答 + file-history-snapshot + tool_result/tool_use → 待機しない", () => {
+    // Regression: real-world pattern where final response has output_tokens=1
+    // and stop_reason=null, followed by file-history-snapshot records.
+    // Without the fix, the code skips the final response and falls through to
+    // an older tool_use+toolResultSeen pair, incorrectly showing loading state.
+    const longResponse = "以下のように使われています：\n\n" +
+      "**husky** — Git hookを自動設定するツール\n" +
+      "- package.jsonのdevDependenciesに含まれている\n" +
+      "- .huskyディレクトリにpre-commitフックが設定されている\n" +
+      "- commitlintと組み合わせてconventional commits形式を強制している\n\n" +
+      "**release-please** — リリース自動化ツール\n" +
+      "- conventional commitsを読み取ってsemverバンプとCHANGELOGを自動生成する";
+    const f = createTempJsonl([
+      assistantMsg([toolUseBlock("Read")], {
+        stop_reason: null,
+        usage: { output_tokens: 25 },
+      }),
+      userMsg([toolResultBlock("file content")]),
+      assistantMsg([toolUseBlock("Read")], {
+        stop_reason: null,
+        usage: { output_tokens: 25 },
+      }),
+      userMsg([toolResultBlock("more content")]),
+      assistantMsg([textBlock(longResponse)], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+        timestamp: "2026-02-19T07:57:01.668Z",
+      }),
+      nonConversationRecord("file-history-snapshot"),
+      nonConversationRecord("file-history-snapshot"),
+      nonConversationRecord("file-history-snapshot"),
+      nonConversationRecord("file-history-snapshot"),
+    ]);
+    const result = readTailMetadata(f);
+    // file-history-snapshots skipped, final assistant has long text + no tool_use
+    // → treated as abandoned (completed) response, not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -776,7 +1064,7 @@ describe("Group 16: Content shape edge cases", () => {
     ]);
     const result = readTailMetadata(f);
     // null is not an array, falls through to isMeta check (false), → isWaiting
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T16.2 - user message with no content field", () => {
@@ -788,7 +1076,7 @@ describe("Group 16: Content shape edge cases", () => {
       },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T16.3 - user message with no message field", () => {
@@ -796,7 +1084,7 @@ describe("Group 16: Content shape edge cases", () => {
       { type: "user", sessionId: "sess-1" },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T16.4 - user message with empty array content", () => {
@@ -805,7 +1093,7 @@ describe("Group 16: Content shape edge cases", () => {
     ]);
     const result = readTailMetadata(f);
     // content[0] is undefined, text is "", not interrupt. [].some() is false. Not isMeta. → isWaiting
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T16.5 - assistant with stop_reason 'tool_use' but no tool_use blocks in content", () => {
@@ -814,7 +1102,7 @@ describe("Group 16: Content shape edge cases", () => {
     ]);
     const result = readTailMetadata(f);
     // "tool_use" is not end_turn/stop_sequence/refusal. Content is string. Falls to isWaiting.
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T16.6 - user with array content, first block has no text (e.g. image)", () => {
@@ -823,7 +1111,7 @@ describe("Group 16: Content shape edge cases", () => {
     ]);
     const result = readTailMetadata(f);
     // content[0].text is undefined → text = "". Not interrupt. No tool_result. Not isMeta. → isWaiting
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
 
@@ -857,7 +1145,7 @@ describe("Group 18: JSON with missing/extra type field", () => {
     ]);
     const result = readTailMetadata(f);
     // type is undefined, not "summary", not user/assistant → skip
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T18.2 - JSON object with type = unknown", () => {
@@ -865,7 +1153,7 @@ describe("Group 18: JSON with missing/extra type field", () => {
       { type: "unknown" },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 
   it("T18.3 - summary record with no other fields", () => {
@@ -873,7 +1161,7 @@ describe("Group 18: JSON with missing/extra type field", () => {
       { type: "summary" },
     ]);
     const result = readTailMetadata(f);
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });
 
@@ -895,7 +1183,7 @@ describe("Group 19: 16KB boundary handling", () => {
     expect(stat.size).toBeGreaterThan(16384);
 
     const result = readTailMetadata(filePath);
-    expect(result).toEqual({ isWaiting: true, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
   it("T19.2 - truncated first line in buffer is gracefully skipped", () => {
@@ -912,6 +1200,6 @@ describe("Group 19: 16KB boundary handling", () => {
     const filePath = createTempRaw(content);
     const result = readTailMetadata(filePath);
     // Truncated line fails JSON.parse → skipped. end_turn → not waiting.
-    expect(result).toEqual({ isWaiting: false, isToolUseWaiting: false });
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
   });
 });

@@ -27,6 +27,7 @@ export interface JnsonlMessage {
     content: string | ContentBlock[];
     model?: string;
     stop_reason?: string | null; // null = streaming/intermediate, "end_turn" = done, "tool_use" = tool call
+    usage?: { output_tokens?: number };
   };
 }
 

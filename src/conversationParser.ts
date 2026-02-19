@@ -130,6 +130,7 @@ export interface TailMetadata {
   isWaiting: boolean;        // last message is user → waiting for Claude's response
   isToolUseWaiting: boolean; // last assistant message has tool_use → waiting for permission
   customTitle?: string;      // custom title set via /rename command
+  lastTimestamp?: string;    // timestamp of the last user/assistant message (for stale detection)
 }
 
 /**
@@ -232,6 +233,11 @@ export function readTailMetadata(filePath: string): TailMetadata {
         continue;
       }
 
+      // Record the latest timestamp from user/assistant messages
+      if (!result.lastTimestamp && msg.timestamp) {
+        result.lastTimestamp = msg.timestamp as string;
+      }
+
       // --- User message ---
       if (type === "user") {
         const content = msg.message?.content;
@@ -263,13 +269,43 @@ export function readTailMetadata(filePath: string): TailMetadata {
 
       // --- Assistant message ---
       const stopReason = msg.message?.stop_reason;
+      const content = msg.message?.content;
 
       if (stopReason === "end_turn" || stopReason === "stop_sequence" || stopReason === "refusal") {
         return result;
       }
 
+      // Detect intermediate streaming placeholder written mid-stream.
+      // Claude Code writes partial messages during streaming with very low
+      // output_tokens counts (typically 0 or 1). These are intermediate writes
+      // UNLESS they contain substantial text with no tool_use blocks, which
+      // indicates the final response was written but end_turn was never recorded.
+      const outputTokens = msg.message?.usage?.output_tokens;
+      if (typeof outputTokens === 'number') {
+        const textLength = Array.isArray(content)
+          ? content.reduce((sum: number, block: ContentBlock) =>
+              sum + (block.type === 'text' && block.text ? block.text.length : 0), 0)
+          : 0;
+        const hasToolUse = Array.isArray(content)
+          && content.some((block: ContentBlock) => block.type === "tool_use" && block.name !== undefined);
+
+        if (outputTokens <= 1) {
+          // If there's long text (>200 chars) and no tool_use, treat as abandoned
+          // (final response where end_turn was never written). Short text may be
+          // a genuine intermediate write during active streaming.
+          if (textLength > 200 && !hasToolUse) {
+            return result;
+          }
+          // Otherwise it's a true intermediate placeholder — skip.
+          continue;
+        }
+        // output_tokens >= 2 but disproportionately low vs text length → abandoned
+        if (textLength > 10 && outputTokens < textLength / 20) {
+          return result;
+        }
+      }
+
       // Check for tool_use blocks
-      const content = msg.message?.content;
       if (Array.isArray(content)) {
         const toolUseBlock = content.find(
           (block: ContentBlock) => block.type === "tool_use" && block.name !== undefined
@@ -376,9 +412,12 @@ async function parseConversationFileFast(
       const tailMeta = readTailMetadata(filePath);
       const customTitle = findCustomTitle(filePath);
 
-      // Suppress waiting indicators for stale sessions (not updated in 5 min)
-      const fileAge = Date.now() - stat.mtime.getTime();
-      const isStale = fileAge > 5 * 60 * 1000;
+      // Suppress waiting indicators for stale sessions (no messages in 10 min)
+      const lastMsgTime = tailMeta.lastTimestamp
+        ? new Date(tailMeta.lastTimestamp).getTime()
+        : stat.mtime.getTime();
+      const msgAge = Date.now() - lastMsgTime;
+      const isStale = msgAge > 10 * 60 * 1000;
 
       resolve({
         sessionId,
