@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.1](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.6.0...claude-code-conversations-v0.6.1) (2026-02-20)
+
+
+### Bug Fixes
+
+* /clear後のセッションで既存タブが検出されず新規タブが開く問題を修正 ([29d7044](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/29d7044e5c47cf6160d4400e61ee878d454cf626))
+* worktree切り替え後のブランチ表示が反映されない問題を修正 ([f2e1417](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/f2e1417db380f8b13424de79ff24a4135fcc818c))
+* 既存タブがあるセッションをクリックすると新規タブが開く問題を修正 ([2e66229](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/2e6622975523e3c0084a4e0d94e2dbfc615d124b))
+* 短いテキスト応答(output_tokens=1)で待機状態が残り続ける問題を修正 ([f1adf87](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/f1adf87b8f570ebeceee29b7283e099b31ecef62))
+
 ## [0.6.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.5.1...claude-code-conversations-v0.6.0) (2026-02-20)
 
 
