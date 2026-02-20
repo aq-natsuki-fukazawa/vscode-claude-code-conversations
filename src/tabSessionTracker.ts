@@ -191,13 +191,23 @@ export class TabSessionTracker {
   /**
    * Find a Claude Code tab that's showing the given session.
    * Returns the Tab + its group index if found.
+   * If the session is not in the local mapping, re-reads SQLite to pick up
+   * tabs opened externally (e.g. by Claude Code directly).
    */
   findTabForSession(
     sessionId: string
   ): { tab: vscode.Tab; groupIndex: number; tabIndex: number } | undefined {
-    const title = this.sessionToTitle.get(sessionId);
+    let title = this.sessionToTitle.get(sessionId);
     log.appendLine(`findTabForSession: sid=${sessionId} → expected title=${JSON.stringify(title)}`);
-    if (!title) return undefined;
+
+    // If we don't have a mapping, re-read SQLite to discover externally opened tabs
+    if (!title) {
+      log.appendLine("  → no mapping, re-reading SQLite...");
+      this.readFromSqlite();
+      title = this.sessionToTitle.get(sessionId);
+      log.appendLine(`  → after re-read: title=${JSON.stringify(title)}`);
+      if (!title) return undefined;
+    }
 
     for (let gi = 0; gi < vscode.window.tabGroups.all.length; gi++) {
       const group = vscode.window.tabGroups.all[gi];
