@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.5.1...claude-code-conversations-v0.6.0) (2026-02-20)
+
+
+### Features
+
+* output_tokensベースの中間プレースホルダー検出 ([337204f](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/337204f961cdc34d20b6b81251af58f048dc145a))
+* readTailMetadataのテスト追加とstaleセッションの待機表示抑制 ([992d760](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/992d7601cdbc1aa508dee6f0271d9f0e2bace5e9))
+* セッションIDコピー・リネーム・削除コマンドを追加 ([d0edca5](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/d0edca57f7851322906fcc5aa47f74ddbc748189))
+
+
+### Bug Fixes
+
+* ツール待機アイコンをwarningからalertに変更 ([4615d56](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/commit/4615d56c46752c559832863dda06fb33ea7a237c))
+
 ## [0.5.1](https://github.com/aq-natsuki-fukazawa/vscode-claude-code-conversations/compare/claude-code-conversations-v0.5.0...claude-code-conversations-v0.5.1) (2026-02-18)
 
 
