@@ -204,6 +204,7 @@ export function readTailMetadata(filePath: string): TailMetadata {
     const lines = tail.split("\n").filter((l) => l.trim());
 
     let toolResultSeen = false;
+    let textResponseSeen = false;
     for (let i = lines.length - 1; i >= 0; i--) {
       let obj: Record<string, unknown>;
       try {
@@ -262,6 +263,11 @@ export function readTailMetadata(filePath: string): TailMetadata {
           continue;
         }
 
+        // System-generated messages (task-notification, etc.) → not real user input
+        if (typeof content === "string" && content.startsWith("<")) {
+          continue;
+        }
+
         // Real user message → Claude should be responding
         result.isWaiting = true;
         return result;
@@ -290,11 +296,17 @@ export function readTailMetadata(filePath: string): TailMetadata {
           && content.some((block: ContentBlock) => block.type === "tool_use" && block.name !== undefined);
 
         if (outputTokens <= 1) {
-          // If there's long text (>200 chars) and no tool_use, treat as abandoned
+          // If there's meaningful text (>100 chars) and no tool_use, treat as abandoned
           // (final response where end_turn was never written). Short text may be
           // a genuine intermediate write during active streaming.
-          if (textLength > 200 && !hasToolUse) {
+          if (textLength > 100 && !hasToolUse) {
             return result;
+          }
+          // Track that we saw a text-only response (even if short),
+          // but only if no tool_result has been seen yet. A text placeholder
+          // followed by more tool activity means the session is still active.
+          if (textLength > 0 && !hasToolUse && !toolResultSeen) {
+            textResponseSeen = true;
           }
           // Otherwise it's a true intermediate placeholder — skip.
           continue;
@@ -324,6 +336,12 @@ export function readTailMetadata(filePath: string): TailMetadata {
         }
 
         if (toolUseBlock && toolResultSeen) {
+          // If a text-only response was seen after this tool chain,
+          // the assistant already moved past tool execution and started
+          // generating a text response. Don't report as waiting.
+          if (textResponseSeen) {
+            return result;
+          }
           result.isWaiting = true;
           return result;
         }

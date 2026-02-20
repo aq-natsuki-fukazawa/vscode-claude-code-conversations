@@ -863,6 +863,30 @@ describe("Group 13b: Intermediate placeholder with tool_use", () => {
     expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 
+  it("T13b.7b - 短いテキスト(output_tokens=1) + file-history-snapshot後のtool_chain → 待機しない", () => {
+    // Real-world pattern: session completed with a short text response (output_tokens=1),
+    // followed by file-history-snapshots. Without the fix, the backward walk skips the
+    // placeholder and falls through to an older tool_use+toolResultSeen pair.
+    const f = createTempJsonl([
+      assistantMsg([toolUseBlock("Bash")], {
+        stop_reason: null,
+        usage: { output_tokens: 19 },
+        timestamp: "2020-01-01T00:00:00Z",
+      }),
+      userMsg([toolResultBlock("command output")]),
+      assistantMsg([textBlock("コミットしました: `280d12e`")], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+      nonConversationRecord("file-history-snapshot"),
+      nonConversationRecord("file-history-snapshot"),
+    ]);
+    const result = readTailMetadata(f);
+    // text placeholder (no toolResultSeen yet) → textResponseSeen=true
+    // tool_result → toolResultSeen, but textResponseSeen prevents isWaiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
   it("T13b.8 - 中間テキスト(output_tokens=1)の前にユーザーメッセージ → 待機中", () => {
     const f = createTempJsonl([
       userMsg("これを修正して"),
@@ -1201,5 +1225,79 @@ describe("Group 19: 16KB boundary handling", () => {
     const result = readTailMetadata(filePath);
     // Truncated line fails JSON.parse → skipped. end_turn → not waiting.
     expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+});
+
+// ============================================================
+// Group 19: システム生成ユーザーメッセージのスキップ
+// ============================================================
+describe("Group 19: System-generated user messages", () => {
+  it("T19.1 - task-notification userメッセージ → real userとみなさずスキップ", () => {
+    const f = createTempJsonl([
+      assistantMsg("done", { stop_reason: "end_turn" }),
+      {
+        type: "user",
+        sessionId: "sess-1",
+        message: {
+          role: "user",
+          content: '<task-notification>\n<task-id>b26a07c</task-id>\n<status>completed</status>\n</task-notification>',
+        },
+      },
+    ]);
+    const result = readTailMetadata(f);
+    // task-notification starts with "<" → skipped, previous assistant end_turn → not waiting
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T19.2 - task-notification + output_tokens=1のassistant → 中断と判定", () => {
+    const midText = "Producer完了しましたが、AWSトークン期限切れのため処理できませんでした。トークンを更新後、以下で再テストできます。docker compose restart kvs_getmedia";
+    const f = createTempJsonl([
+      {
+        type: "user",
+        sessionId: "sess-1",
+        message: {
+          role: "user",
+          content: '<task-notification>\n<task-id>b26a07c</task-id>\n<status>completed</status>\n</task-notification>',
+        },
+      },
+      assistantMsg([textBlock(midText)], {
+        stop_reason: null,
+        usage: { output_tokens: 1 },
+      }),
+    ]);
+    const result = readTailMetadata(f);
+    // output_tokens=1 + text > 100 chars → abandoned; even if not, task-notification skipped
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T19.3 - XMLタグで始まるuserメッセージ(system-reminder等) → スキップ", () => {
+    const f = createTempJsonl([
+      assistantMsg("done", { stop_reason: "end_turn" }),
+      {
+        type: "user",
+        sessionId: "sess-1",
+        message: {
+          role: "user",
+          content: '<system-reminder>Some internal state</system-reminder>',
+        },
+      },
+    ]);
+    const result = readTailMetadata(f);
+    expect(result).toMatchObject({ isWaiting: false, isToolUseWaiting: false });
+  });
+
+  it("T19.4 - 通常のuserメッセージ(テキスト) → 引き続きisWaiting=true", () => {
+    const f = createTempJsonl([
+      {
+        type: "user",
+        sessionId: "sess-1",
+        message: {
+          role: "user",
+          content: "こんにちは、修正してください",
+        },
+      },
+    ]);
+    const result = readTailMetadata(f);
+    expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
