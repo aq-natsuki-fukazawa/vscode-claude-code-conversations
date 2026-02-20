@@ -2,7 +2,7 @@
   "name": "claude-code-conversations",
   "displayName": "Claude Code Conversations",
   "description": "Always-visible past conversations panel for Claude Code",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
