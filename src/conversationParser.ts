@@ -77,7 +77,7 @@ async function parseConversationFile(
           if (obj.timestamp) {
             lastTimestamp = obj.timestamp;
           }
-          if (!gitBranch && obj.gitBranch) {
+          if (obj.gitBranch) {
             gitBranch = obj.gitBranch;
           }
         }
@@ -131,6 +131,7 @@ export interface TailMetadata {
   isToolUseWaiting: boolean; // last assistant message has tool_use → waiting for permission
   customTitle?: string;      // custom title set via /rename command
   lastTimestamp?: string;    // timestamp of the last user/assistant message (for stale detection)
+  gitBranch?: string;        // most recent gitBranch from tail (overrides head-of-file value for worktree switches)
 }
 
 /**
@@ -234,9 +235,12 @@ export function readTailMetadata(filePath: string): TailMetadata {
         continue;
       }
 
-      // Record the latest timestamp from user/assistant messages
+      // Record the latest timestamp and gitBranch from user/assistant messages
       if (!result.lastTimestamp && msg.timestamp) {
         result.lastTimestamp = msg.timestamp as string;
+      }
+      if (!result.gitBranch && msg.gitBranch) {
+        result.gitBranch = msg.gitBranch as string;
       }
 
       // --- User message ---
@@ -444,7 +448,7 @@ async function parseConversationFileFast(
         filePath,
         messageCount: estimatedMessages,
         model,
-        gitBranch,
+        gitBranch: tailMeta.gitBranch || gitBranch,
         projectPath,
         projectDir,
         isPinned: false,

@@ -1301,3 +1301,96 @@ describe("Group 19: System-generated user messages", () => {
     expect(result).toMatchObject({ isWaiting: true, isToolUseWaiting: false });
   });
 });
+
+// ============================================================
+// Group 20: gitBranch extraction from tail
+// ============================================================
+describe("Group 20: gitBranch extraction from tail", () => {
+  it("T20.1 - gitBranch is extracted from the most recent user/assistant message", () => {
+    const f = createTempJsonl([
+      {
+        type: "user",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:00:00Z",
+        gitBranch: "main",
+        message: { role: "user", content: "hello" },
+      },
+      {
+        type: "assistant",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:00:01Z",
+        gitBranch: "worktree-feature-branch",
+        message: { role: "assistant", content: "hi", stop_reason: "end_turn" },
+      },
+    ]);
+    const result = readTailMetadata(f);
+    expect(result.gitBranch).toBe("worktree-feature-branch");
+  });
+
+  it("T20.2 - gitBranch from tail reflects worktree switch mid-session", () => {
+    const f = createTempJsonl([
+      {
+        type: "user",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:00:00Z",
+        gitBranch: "main",
+        message: { role: "user", content: "switch to worktree" },
+      },
+      {
+        type: "assistant",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:00:01Z",
+        gitBranch: "main",
+        message: { role: "assistant", content: "ok", stop_reason: "end_turn" },
+      },
+      {
+        type: "user",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:01:00Z",
+        gitBranch: "worktree-new-feature",
+        message: { role: "user", content: "now on worktree" },
+      },
+      {
+        type: "assistant",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:01:01Z",
+        gitBranch: "worktree-new-feature",
+        message: { role: "assistant", content: "got it", stop_reason: "end_turn" },
+      },
+    ]);
+    const result = readTailMetadata(f);
+    expect(result.gitBranch).toBe("worktree-new-feature");
+  });
+
+  it("T20.3 - no gitBranch in any message", () => {
+    const f = createTempJsonl([
+      userMsg("hello"),
+      assistantMsg("hi", { stop_reason: "end_turn" }),
+    ]);
+    const result = readTailMetadata(f);
+    expect(result.gitBranch).toBeUndefined();
+  });
+
+  it("T20.4 - sidechain messages are skipped for gitBranch extraction", () => {
+    const f = createTempJsonl([
+      {
+        type: "assistant",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:00:00Z",
+        gitBranch: "main",
+        message: { role: "assistant", content: "done", stop_reason: "end_turn" },
+      },
+      {
+        type: "user",
+        sessionId: "sess-1",
+        timestamp: "2026-02-19T00:01:00Z",
+        gitBranch: "worktree-sidechain",
+        isSidechain: true,
+        message: { role: "user", content: "side" },
+      },
+    ]);
+    const result = readTailMetadata(f);
+    // Sidechain is skipped, so gitBranch comes from the assistant message
+    expect(result.gitBranch).toBe("main");
+  });
+});
