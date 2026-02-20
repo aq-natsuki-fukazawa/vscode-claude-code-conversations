@@ -195,7 +195,8 @@ export class TabSessionTracker {
    * tabs opened externally (e.g. by Claude Code directly).
    */
   findTabForSession(
-    sessionId: string
+    sessionId: string,
+    conversationTitle?: string
   ): { tab: vscode.Tab; groupIndex: number; tabIndex: number } | undefined {
     let title = this.sessionToTitle.get(sessionId);
     log.appendLine(`findTabForSession: sid=${sessionId} → expected title=${JSON.stringify(title)}`);
@@ -206,9 +207,10 @@ export class TabSessionTracker {
       this.readFromSqlite();
       title = this.sessionToTitle.get(sessionId);
       log.appendLine(`  → after re-read: title=${JSON.stringify(title)}`);
-      if (!title) return undefined;
     }
 
+    // Collect all Claude Code tabs for multi-strategy matching
+    const claudeTabs: { tab: vscode.Tab; groupIndex: number; tabIndex: number; normalizedLabel: string }[] = [];
     for (let gi = 0; gi < vscode.window.tabGroups.all.length; gi++) {
       const group = vscode.window.tabGroups.all[gi];
       for (let ti = 0; ti < group.tabs.length; ti++) {
@@ -217,11 +219,43 @@ export class TabSessionTracker {
           tab.input instanceof vscode.TabInputWebview &&
           (tab.input as vscode.TabInputWebview).viewType.includes("claudeVSCodePanel")
         ) {
-          const normalizedLabel = collapseWhitespace(tab.label);
-          const match = normalizedLabel === title || normalizedLabel.startsWith(title);
-          log.appendLine(`  tab[${gi}][${ti}]: label=${JSON.stringify(tab.label)} normalizedLabel=${JSON.stringify(normalizedLabel)} match=${match}`);
-          if (match) {
-            return { tab, groupIndex: gi, tabIndex: ti };
+          claudeTabs.push({ tab, groupIndex: gi, tabIndex: ti, normalizedLabel: collapseWhitespace(tab.label) });
+        }
+      }
+    }
+
+    // Strategy 1: Match by SQLite-derived title
+    if (title) {
+      for (const ct of claudeTabs) {
+        const match = ct.normalizedLabel === title || ct.normalizedLabel.startsWith(title);
+        log.appendLine(`  tab[${ct.groupIndex}][${ct.tabIndex}]: label=${JSON.stringify(ct.tab.label)} normalizedLabel=${JSON.stringify(ct.normalizedLabel)} match=${match}`);
+        if (match) {
+          return { tab: ct.tab, groupIndex: ct.groupIndex, tabIndex: ct.tabIndex };
+        }
+      }
+    }
+
+    // Strategy 2: Match by conversation title from JSONL metadata.
+    // Handles post-/clear cases where SQLite hasn't been updated with the new session ID yet
+    // but the tab label already reflects the conversation title.
+    if (conversationTitle) {
+      const normalizedConvTitle = normalizeTabTitle(conversationTitle);
+      if (normalizedConvTitle && normalizedConvTitle !== title && normalizedConvTitle !== "Claude Code") {
+        log.appendLine(`  → fallback: trying JSONL title ${JSON.stringify(normalizedConvTitle)}`);
+        for (const ct of claudeTabs) {
+          if (ct.normalizedLabel === normalizedConvTitle) {
+            log.appendLine(`  fallback exact match tab[${ct.groupIndex}][${ct.tabIndex}]`);
+            this.sessionToTitle.set(sessionId, ct.normalizedLabel);
+            this.titleToSession.set(ct.normalizedLabel, sessionId);
+            return { tab: ct.tab, groupIndex: ct.groupIndex, tabIndex: ct.tabIndex };
+          }
+        }
+        for (const ct of claudeTabs) {
+          if (ct.normalizedLabel.startsWith(normalizedConvTitle)) {
+            log.appendLine(`  fallback startsWith match tab[${ct.groupIndex}][${ct.tabIndex}]`);
+            this.sessionToTitle.set(sessionId, ct.normalizedLabel);
+            this.titleToSession.set(ct.normalizedLabel, sessionId);
+            return { tab: ct.tab, groupIndex: ct.groupIndex, tabIndex: ct.tabIndex };
           }
         }
       }

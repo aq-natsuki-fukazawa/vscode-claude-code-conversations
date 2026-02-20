@@ -59,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (suppressOpen) return;
         try {
           // Check if this session already has an open tab
-          const existing = tabTracker.findTabForSession(meta.sessionId);
+          const existing = tabTracker.findTabForSession(meta.sessionId, meta.title);
           if (existing) {
             await tabTracker.focusTab(existing);
             return;
